@@ -43,6 +43,7 @@ export default function Home() {
   const [songs, setSongs] = useState<UploadedSong[]>([]);
   const [activeSongUrl, setActiveSongUrl] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [deletingUrl, setDeletingUrl] = useState<string>("");
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -142,6 +143,36 @@ export default function Home() {
     }
   }
 
+  async function onDeleteSong(song: UploadedSong) {
+    setDeletingUrl(song.url);
+    setNotice("");
+    setError("");
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: song.url }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error ?? "Delete failed.");
+      }
+
+      setNotice("Song deleted.");
+      await loadSongs();
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error ? deleteError.message : "Delete failed.";
+      setError(message);
+    } finally {
+      setDeletingUrl("");
+    }
+  }
+
   const activeSong = songs.find((song) => song.url === activeSongUrl) ?? songs[0];
 
   return (
@@ -164,8 +195,7 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="stagger-1 rounded-3xl border border-white/80 bg-gradient-to-br from-rose-50 to-cyan-50 p-5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] sm:p-6">
+        <section className="stagger-1 mt-8 rounded-3xl border border-white/80 bg-gradient-to-br from-rose-50 to-cyan-50 p-5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] sm:p-6">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
               Now playing
             </p>
@@ -198,52 +228,9 @@ export default function Home() {
               </p>
               <p className="rounded-xl bg-white/70 px-3 py-2">Max 10 MB for each file</p>
             </div>
-          </div>
-
-          <form
-            onSubmit={onUpload}
-            className="stagger-2 grid gap-4 rounded-3xl bg-slate-900 p-5 text-white shadow-[0_24px_60px_-35px_rgba(15,23,42,1)] sm:p-6"
-          >
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Share with friend</p>
-              <h3 className="mt-2 text-xl font-semibold">Upload new audio</h3>
-            </div>
-
-            <label className="text-sm leading-6 text-slate-200">
-              Choose MP3 or M4A files (max 5)
-              <input
-                type="file"
-                accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
-                multiple
-                onChange={onChooseFiles}
-                className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-rose-200 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
-              />
-            </label>
-
-            {selectedFiles.length > 0 && (
-              <ul className="grid max-h-40 gap-2 overflow-auto text-sm text-slate-200">
-                {selectedFiles.map((file) => (
-                  <li key={file.name} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2">
-                    {file.name} ({bytesToMb(file.size)} MB)
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-rose-200 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Uploading..." : "Send songs"}
-            </button>
-
-            {notice && <p className="text-sm text-emerald-300">{notice}</p>}
-            {error && <p className="text-sm text-rose-300">{error}</p>}
-          </form>
         </section>
 
-        <section className="stagger-3 mt-6 rounded-3xl border border-white/70 bg-white/75 p-4 sm:p-6">
+        <section className="stagger-2 mt-6 rounded-3xl border border-white/70 bg-white/75 p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-slate-900">Playlist</h3>
             <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
@@ -262,27 +249,84 @@ export default function Home() {
               const isActive = activeSong?.url === song.url;
 
               return (
-                <button
+                <article
                   key={song.url}
-                  type="button"
-                  onClick={() => setActiveSongUrl(song.url)}
                   className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                     isActive
                       ? "border-rose-300 bg-rose-50"
                       : "border-slate-200 bg-white/90 hover:border-cyan-200 hover:bg-cyan-50/50"
                   }`}
                 >
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {index + 1}. {toDisplayTitle(song.pathname)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {toFriendlyTime(song.uploadedAt)} - {bytesToMb(song.size)} MB
-                  </p>
-                </button>
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSongUrl(song.url)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {index + 1}. {toDisplayTitle(song.pathname)}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600">
+                        {toFriendlyTime(song.uploadedAt)} - {bytesToMb(song.size)} MB
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void onDeleteSong(song)}
+                      disabled={deletingUrl === song.url}
+                      className="shrink-0 rounded-lg border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {deletingUrl === song.url ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                </article>
               );
             })}
           </div>
         </section>
+
+        <form
+          onSubmit={onUpload}
+          className="stagger-3 mt-6 grid gap-4 rounded-3xl bg-slate-900 p-5 text-white shadow-[0_24px_60px_-35px_rgba(15,23,42,1)] sm:p-6"
+        >
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Share with friend</p>
+            <h3 className="mt-2 text-xl font-semibold">Upload new audio</h3>
+          </div>
+
+          <label className="text-sm leading-6 text-slate-200">
+            Choose MP3 or M4A files (max 5)
+            <input
+              type="file"
+              accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
+              multiple
+              onChange={onChooseFiles}
+              className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-rose-200 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
+            />
+          </label>
+
+          {selectedFiles.length > 0 && (
+            <ul className="grid max-h-40 gap-2 overflow-auto text-sm text-slate-200">
+              {selectedFiles.map((file) => (
+                <li key={file.name} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2">
+                  {file.name} ({bytesToMb(file.size)} MB)
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-rose-200 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
+          >
+            {loading ? "Uploading..." : "Send songs"}
+          </button>
+
+          {notice && <p className="text-sm text-emerald-300">{notice}</p>}
+          {error && <p className="text-sm text-rose-300">{error}</p>}
+        </form>
       </section>
     </main>
   );

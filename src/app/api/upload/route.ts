@@ -1,4 +1,4 @@
-import { list, put } from "@vercel/blob";
+import { del, list, put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -113,5 +113,29 @@ export async function GET() {
     return NextResponse.json({ songs });
   } catch {
     return NextResponse.json({ error: "Could not load songs." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!hasBlobToken()) {
+    return NextResponse.json(
+      {
+        error:
+          "Missing BLOB_READ_WRITE_TOKEN. Add it in Vercel project environment variables.",
+      },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const body = (await request.json()) as { url?: string };
+    if (!body.url) {
+      return NextResponse.json({ error: "Song url is required." }, { status: 400 });
+    }
+
+    await del(body.url, { token: process.env.BLOB_READ_WRITE_TOKEN });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Could not delete song." }, { status: 500 });
   }
 }
