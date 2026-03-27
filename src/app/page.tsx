@@ -24,9 +24,24 @@ function getAudioMimeType(pathname: string) {
   return "audio/mpeg";
 }
 
+function toDisplayTitle(pathname: string) {
+  const fullName = pathname.split("/").pop() ?? "Unknown track";
+  return fullName.replace(/^\d+-/, "");
+}
+
+function toFriendlyTime(value: string) {
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function Home() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [songs, setSongs] = useState<UploadedSong[]>([]);
+  const [activeSongUrl, setActiveSongUrl] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -46,6 +61,17 @@ export default function Home() {
 
       const body = (await response.json()) as { songs: UploadedSong[] };
       setSongs(body.songs);
+      setActiveSongUrl((previous) => {
+        if (body.songs.length === 0) {
+          return "";
+        }
+
+        if (previous && body.songs.some((song) => song.url === previous)) {
+          return previous;
+        }
+
+        return body.songs[0].url;
+      });
     } catch (fetchError) {
       const message =
         fetchError instanceof Error
@@ -103,7 +129,7 @@ export default function Home() {
       }
 
       setSelectedFiles([]);
-      setNotice("Upload successful.");
+      setNotice("Your songs are shared. Your friend can play them now.");
       await loadSongs();
     } catch (uploadError) {
       const message =
@@ -116,92 +142,145 @@ export default function Home() {
     }
   }
 
-  return (
-    <main className="relative flex min-h-screen items-start justify-center overflow-hidden px-4 py-12 sm:px-8">
-      <div className="noise pointer-events-none absolute inset-0" />
+  const activeSong = songs.find((song) => song.url === activeSongUrl) ?? songs[0];
 
-      <section className="relative z-10 w-full max-w-4xl rounded-3xl border border-white/45 bg-white/85 p-6 shadow-[0_30px_90px_-45px_rgba(18,32,60,0.45)] backdrop-blur sm:p-10">
-        <header className="space-y-3">
-          <p className="font-mono text-xs uppercase tracking-[0.26em] text-sky-900/75">
-            Next.js + Vercel Blob
+  return (
+    <main className="relative flex min-h-screen items-start justify-center overflow-hidden px-4 py-10 sm:px-8 sm:py-14">
+      <div className="noise pointer-events-none absolute inset-0" />
+      <div className="pointer-events-none absolute left-[-80px] top-10 h-48 w-48 rounded-full bg-rose-200/70 blur-3xl sm:h-80 sm:w-80" />
+      <div className="pointer-events-none absolute bottom-0 right-[-40px] h-52 w-52 rounded-full bg-cyan-200/70 blur-3xl sm:h-80 sm:w-80" />
+
+      <section className="fade-in relative z-10 w-full max-w-5xl rounded-[2rem] border border-white/70 bg-white/80 p-5 shadow-[0_36px_90px_-44px_rgba(49,65,112,0.55)] backdrop-blur-xl sm:p-8">
+        <header className="space-y-3 px-1">
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-rose-700/80">
+            Soft music room
           </p>
-          <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-5xl">
-            Upload short MP3 files and host them on Vercel
+          <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-[3.1rem]">
+            Relax and listen together
           </h1>
           <p className="max-w-2xl text-sm text-slate-700 sm:text-base">
-            You can pick up to 5 files each upload. Every uploaded song will show
-            up below with an audio player.
+            A tiny place for you and your friend. Upload songs, pick from the list,
+            and play calm audio anytime.
           </p>
         </header>
 
-        <form onSubmit={onUpload} className="mt-8 grid gap-4 rounded-2xl bg-slate-950 p-5 text-white sm:p-6">
-          <label className="text-sm leading-6 text-slate-200">
-            Choose MP3 or M4A files (max 5)
-            <input
-              type="file"
-              accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
-              multiple
-              onChange={onChooseFiles}
-              className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:font-semibold file:text-slate-950"
-            />
-          </label>
+        <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="stagger-1 rounded-3xl border border-white/80 bg-gradient-to-br from-rose-50 to-cyan-50 p-5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] sm:p-6">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+              Now playing
+            </p>
+            <h2 className="mt-2 truncate text-2xl font-semibold text-slate-900">
+              {activeSong ? toDisplayTitle(activeSong.pathname) : "No song yet"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {activeSong
+                ? `Shared on ${toFriendlyTime(activeSong.uploadedAt)}`
+                : "Upload a song to start your music room."}
+            </p>
 
-          {selectedFiles.length > 0 && (
-            <ul className="grid gap-2 text-sm text-slate-200">
-              {selectedFiles.map((file) => (
-                <li key={file.name} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2">
-                  {file.name} ({bytesToMb(file.size)} MB)
-                </li>
-              ))}
-            </ul>
-          )}
+            <div className="mt-4 rounded-2xl border border-rose-100 bg-white/80 p-4">
+              {activeSong ? (
+                <audio key={activeSong.url} controls autoPlay className="w-full" preload="metadata">
+                  <source
+                    src={activeSong.url}
+                    type={getAudioMimeType(activeSong.pathname)}
+                  />
+                  Your browser does not support audio playback.
+                </audio>
+              ) : (
+                <p className="text-sm text-slate-500">Please upload a song first.</p>
+              )}
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-1 rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+            <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+              <p className="rounded-xl bg-white/70 px-3 py-2">
+                Format: MP3 and M4A
+              </p>
+              <p className="rounded-xl bg-white/70 px-3 py-2">Max 10 MB for each file</p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={onUpload}
+            className="stagger-2 grid gap-4 rounded-3xl bg-slate-900 p-5 text-white shadow-[0_24px_60px_-35px_rgba(15,23,42,1)] sm:p-6"
           >
-            {loading ? "Uploading..." : "Upload audio files"}
-          </button>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Share with friend</p>
+              <h3 className="mt-2 text-xl font-semibold">Upload new audio</h3>
+            </div>
 
-          {notice && <p className="text-sm text-emerald-300">{notice}</p>}
-          {error && <p className="text-sm text-rose-300">{error}</p>}
-        </form>
+            <label className="text-sm leading-6 text-slate-200">
+              Choose MP3 or M4A files (max 5)
+              <input
+                type="file"
+                accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
+                multiple
+                onChange={onChooseFiles}
+                className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-rose-200 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
+              />
+            </label>
 
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold text-slate-900">Uploaded songs</h2>
-          <div className="mt-3 grid gap-3">
+            {selectedFiles.length > 0 && (
+              <ul className="grid max-h-40 gap-2 overflow-auto text-sm text-slate-200">
+                {selectedFiles.map((file) => (
+                  <li key={file.name} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2">
+                    {file.name} ({bytesToMb(file.size)} MB)
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl bg-rose-200 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Uploading..." : "Send songs"}
+            </button>
+
+            {notice && <p className="text-sm text-emerald-300">{notice}</p>}
+            {error && <p className="text-sm text-rose-300">{error}</p>}
+          </form>
+        </section>
+
+        <section className="stagger-3 mt-6 rounded-3xl border border-white/70 bg-white/75 p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold text-slate-900">Playlist</h3>
+            <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
+              {songs.length} tracks
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-2">
             {songs.length === 0 && (
-              <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-sm text-slate-600">
-                No uploaded songs yet.
+              <p className="rounded-xl border border-dashed border-slate-300 bg-white/75 px-4 py-6 text-sm text-slate-600">
+                No songs yet. Upload your first calm track.
               </p>
             )}
 
-            {songs.map((song) => (
-              <article
-                key={song.url}
-                className="rounded-xl border border-slate-200 bg-white/80 p-4"
-              >
-                <p className="truncate text-sm font-semibold text-slate-900">
-                  {song.pathname.split("/").pop()}
-                </p>
-                <p className="mt-1 text-xs text-slate-600">
-                  {new Date(song.uploadedAt).toLocaleString()} - {bytesToMb(song.size)} MB
-                </p>
-                <audio controls className="mt-3 w-full" preload="none">
-                  <source src={song.url} type={getAudioMimeType(song.pathname)} />
-                  Your browser does not support audio playback.
-                </audio>
-                <a
-                  href={song.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-block text-sm font-medium text-sky-700 hover:text-sky-900"
+            {songs.map((song, index) => {
+              const isActive = activeSong?.url === song.url;
+
+              return (
+                <button
+                  key={song.url}
+                  type="button"
+                  onClick={() => setActiveSongUrl(song.url)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                    isActive
+                      ? "border-rose-300 bg-rose-50"
+                      : "border-slate-200 bg-white/90 hover:border-cyan-200 hover:bg-cyan-50/50"
+                  }`}
                 >
-                  Open file URL
-                </a>
-              </article>
-            ))}
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {index + 1}. {toDisplayTitle(song.pathname)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {toFriendlyTime(song.uploadedAt)} - {bytesToMb(song.size)} MB
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </section>
       </section>

@@ -14,8 +14,8 @@ const spaceMono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My Song Upload",
-  description: "Upload and host short MP3 files with Next.js and Vercel Blob.",
+  title: "Soft Music Room",
+  description: "A calm music sharing page for friends, powered by Next.js and Vercel Blob.",
 };
 
 export default function RootLayout({
