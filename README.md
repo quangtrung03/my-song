@@ -1,6 +1,6 @@
 # Audio Upload App (Next.js + Vercel Blob)
 
-Trang này cho phep upload toi da 5 file audio moi lan (MP3/M4A), sau do hien player de nghe lai.
+Trang này cho phep upload toi da 5 file audio moi lan (nhieu dinh dang), sau do hien player de nghe lai.
 
 ## 1) Chay local
 
@@ -35,5 +35,4 @@ Sau khi deploy, cac file audio duoc luu tren Vercel Blob nen khong bi mat khi se
 ## Gioi han hien tai
 
 - Toi da 5 file moi lan upload (client-side).
-- Moi file toi da 10MB (server-side).
-- Dinh dang hop le: `.mp3`, `.m4a`, `audio/mpeg`, `audio/mp4`, `audio/x-m4a`.
+- Khuyen nghi: dung file audio ngan de tai len nhanh hon.

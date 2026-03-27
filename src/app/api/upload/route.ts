@@ -1,22 +1,34 @@
 import { del, list, put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const VALID_SENDERS = ["You", "Friend"] as const;
+
+type Sender = (typeof VALID_SENDERS)[number];
 
 function hasBlobToken() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
-function isValidMp3(file: File) {
-  const lowerName = file.name.toLowerCase();
+function normalizeSender(value: FormDataEntryValue | null): Sender {
+  if (typeof value !== "string") {
+    return "You";
+  }
 
-  return (
-    file.type === "audio/mpeg" ||
-    file.type === "audio/mp4" ||
-    file.type === "audio/x-m4a" ||
-    lowerName.endsWith(".mp3") ||
-    lowerName.endsWith(".m4a")
-  );
+  return VALID_SENDERS.includes(value as Sender) ? (value as Sender) : "You";
+}
+
+function getSongSender(pathname: string): Sender {
+  const fullName = pathname.split("/").pop() ?? "";
+  const parts = fullName.split("__");
+
+  if (parts.length >= 3) {
+    const decodedSender = decodeURIComponent(parts[1]);
+    if (VALID_SENDERS.includes(decodedSender as Sender)) {
+      return decodedSender as Sender;
+    }
+  }
+
+  return "You";
 }
 
 export async function POST(request: Request) {
@@ -33,33 +45,25 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
+    const sender = normalizeSender(formData.get("sender"));
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "File is required." }, { status: 400 });
     }
 
-    if (!isValidMp3(file)) {
-      return NextResponse.json(
-        { error: "Only MP3 and M4A files are allowed." },
-        { status: 400 }
-      );
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: "File is too large. Maximum size is 10 MB per file." },
-        { status: 400 }
-      );
-    }
-
     const normalizedName = file.name.trim();
+    const encodedSender = encodeURIComponent(sender);
     const encodedName = encodeURIComponent(normalizedName);
 
-    const uploaded = await put(`songs/${Date.now()}__${encodedName}`, file, {
-      access: "public",
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    const uploaded = await put(
+      `songs/${Date.now()}__${encodedSender}__${encodedName}`,
+      file,
+      {
+        access: "public",
+        addRandomSuffix: false,
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      }
+    );
 
     return NextResponse.json(
       {
@@ -68,6 +72,7 @@ export async function POST(request: Request) {
           pathname: uploaded.pathname,
           size: file.size,
           uploadedAt: new Date().toISOString(),
+          sender,
         },
       },
       { status: 201 }
@@ -106,6 +111,7 @@ export async function GET() {
         pathname: blob.pathname,
         size: blob.size,
         uploadedAt: blob.uploadedAt,
+        sender: getSongSender(blob.pathname),
       }));
 
     return NextResponse.json({ songs });

@@ -7,6 +7,7 @@ type UploadedSong = {
   pathname: string;
   size: number;
   uploadedAt: string;
+  sender: "You" | "Friend";
 };
 
 const MAX_SONGS = 5;
@@ -27,8 +28,19 @@ function getAudioMimeType(pathname: string) {
 function toDisplayTitle(pathname: string) {
   const fullName = pathname.split("/").pop() ?? "Unknown track";
 
-  // New format: <timestamp>__<encoded-original-name>
-  const encodedOriginalName = fullName.split("__")[1];
+  // New format: <timestamp>__<sender>__<encoded-original-name>
+  const newFormatParts = fullName.split("__");
+  if (newFormatParts.length >= 3) {
+    const encodedOriginalName = newFormatParts.slice(2).join("__");
+    try {
+      return decodeURIComponent(encodedOriginalName);
+    } catch {
+      return encodedOriginalName;
+    }
+  }
+
+  // Mid format fallback: <timestamp>__<encoded-original-name>
+  const encodedOriginalName = newFormatParts[1];
   if (encodedOriginalName) {
     try {
       return decodeURIComponent(encodedOriginalName);
@@ -64,6 +76,7 @@ function toFriendlyTime(value: string) {
 export default function Home() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [songs, setSongs] = useState<UploadedSong[]>([]);
+  const [sender, setSender] = useState<"You" | "Friend">("You");
   const [activeSongUrl, setActiveSongUrl] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [deletingUrl, setDeletingUrl] = useState<string>("");
@@ -128,7 +141,7 @@ export default function Home() {
     event.preventDefault();
 
     if (selectedFiles.length === 0) {
-      setError("Please choose at least one MP3 or M4A file.");
+      setError("Please choose at least one audio file.");
       return;
     }
 
@@ -140,6 +153,7 @@ export default function Home() {
       for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("sender", sender);
 
         const response = await fetch("/api/upload", {
           method: "POST",
@@ -167,6 +181,14 @@ export default function Home() {
   }
 
   async function onDeleteSong(song: UploadedSong) {
+    const okToDelete = window.confirm(
+      `Delete "${toDisplayTitle(song.pathname)}" from playlist?`
+    );
+
+    if (!okToDelete) {
+      return;
+    }
+
     setDeletingUrl(song.url);
     setNotice("");
     setError("");
@@ -227,7 +249,7 @@ export default function Home() {
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               {activeSong
-                ? `Shared on ${toFriendlyTime(activeSong.uploadedAt)}`
+                ? `Shared by ${activeSong.sender} on ${toFriendlyTime(activeSong.uploadedAt)}`
                 : "Upload a song to start your music room."}
             </p>
 
@@ -271,10 +293,8 @@ export default function Home() {
             </div>
 
             <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-              <p className="rounded-xl bg-white/70 px-3 py-2">
-                Format: MP3 and M4A
-              </p>
-              <p className="rounded-xl bg-white/70 px-3 py-2">Max 10 MB for each file</p>
+              <p className="rounded-xl bg-white/70 px-3 py-2">All audio formats are welcome</p>
+              <p className="rounded-xl bg-white/70 px-3 py-2">Share songs with your friend</p>
             </div>
         </section>
 
@@ -315,7 +335,7 @@ export default function Home() {
                         {index + 1}. {toDisplayTitle(song.pathname)}
                       </p>
                       <p className="mt-1 text-xs text-slate-600">
-                        {toFriendlyTime(song.uploadedAt)} - {bytesToMb(song.size)} MB
+                        {song.sender} - {toFriendlyTime(song.uploadedAt)} - {bytesToMb(song.size)} MB
                       </p>
                     </button>
 
@@ -344,14 +364,26 @@ export default function Home() {
           </div>
 
           <label className="text-sm leading-6 text-slate-200">
-            Choose MP3 or M4A files (max 5)
+            Choose audio files (max 5 each time)
             <input
               type="file"
-              accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
+              accept="audio/*"
               multiple
               onChange={onChooseFiles}
               className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-rose-200 file:px-3 file:py-2 file:font-semibold file:text-slate-900"
             />
+          </label>
+
+          <label className="text-sm leading-6 text-slate-200">
+            Sender
+            <select
+              value={sender}
+              onChange={(event) => setSender(event.target.value as "You" | "Friend")}
+              className="mt-2 block w-full rounded-xl border border-white/20 bg-white/10 p-3 text-sm"
+            >
+              <option value="You">You</option>
+              <option value="Friend">Friend</option>
+            </select>
           </label>
 
           {selectedFiles.length > 0 && (
