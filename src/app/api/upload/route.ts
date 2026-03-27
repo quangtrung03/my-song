@@ -52,14 +52,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const safeName = file.name
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
+    const normalizedName = file.name.trim();
+    const encodedName = encodeURIComponent(normalizedName);
 
-    const uploaded = await put(`songs/${Date.now()}-${safeName}`, file, {
+    const uploaded = await put(`songs/${Date.now()}__${encodedName}`, file, {
       access: "public",
-      addRandomSuffix: true,
+      addRandomSuffix: false,
       token: process.env.BLOB_READ_WRITE_TOKEN,
     });
 

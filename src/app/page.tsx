@@ -26,7 +26,30 @@ function getAudioMimeType(pathname: string) {
 
 function toDisplayTitle(pathname: string) {
   const fullName = pathname.split("/").pop() ?? "Unknown track";
-  return fullName.replace(/^\d+-/, "");
+
+  // New format: <timestamp>__<encoded-original-name>
+  const encodedOriginalName = fullName.split("__")[1];
+  if (encodedOriginalName) {
+    try {
+      return decodeURIComponent(encodedOriginalName);
+    } catch {
+      return encodedOriginalName;
+    }
+  }
+
+  // Legacy format fallback: remove timestamp/random suffix and normalize dashes.
+  const legacyWithoutPrefix = fullName.replace(/^\d+-/, "");
+  const dotIndex = legacyWithoutPrefix.lastIndexOf(".");
+
+  if (dotIndex <= 0) {
+    return legacyWithoutPrefix.replace(/-/g, " ");
+  }
+
+  const base = legacyWithoutPrefix.slice(0, dotIndex);
+  const ext = legacyWithoutPrefix.slice(dotIndex);
+  const cleanedBase = base.replace(/-[A-Za-z0-9]{12,}$/, "");
+
+  return `${cleanedBase.replace(/-/g, " ")}${ext}`;
 }
 
 function toFriendlyTime(value: string) {
@@ -208,18 +231,43 @@ export default function Home() {
                 : "Upload a song to start your music room."}
             </p>
 
-            <div className="mt-4 rounded-2xl border border-rose-100 bg-white/80 p-4">
-              {activeSong ? (
-                <audio key={activeSong.url} controls autoPlay className="w-full" preload="metadata">
-                  <source
-                    src={activeSong.url}
-                    type={getAudioMimeType(activeSong.pathname)}
-                  />
-                  Your browser does not support audio playback.
-                </audio>
-              ) : (
-                <p className="text-sm text-slate-500">Please upload a song first.</p>
-              )}
+            <div className="mt-5 grid gap-4 md:grid-cols-[170px_1fr] md:items-center">
+              <div className="flex justify-center md:justify-start">
+                <div className={`vinyl-disc ${activeSong ? "is-spinning" : ""}`}>
+                  <div className="vinyl-ring" />
+                  <div className="vinyl-ring vinyl-ring-2" />
+                  <div className="vinyl-core">
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      className="h-7 w-7 text-white/95"
+                      fill="currentColor"
+                    >
+                      <path d="M18 3a1 1 0 0 0-1 1v8.1a4 4 0 1 0 2 3.4V7.3l2.6-.65a1 1 0 0 0-.48-1.94L18 5.5V4a1 1 0 0 0-1-1ZM9 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-rose-100 bg-white/80 p-4">
+                {activeSong ? (
+                  <audio
+                    key={activeSong.url}
+                    controls
+                    autoPlay
+                    className="w-full"
+                    preload="metadata"
+                  >
+                    <source
+                      src={activeSong.url}
+                      type={getAudioMimeType(activeSong.pathname)}
+                    />
+                    Your browser does not support audio playback.
+                  </audio>
+                ) : (
+                  <p className="text-sm text-slate-500">Please upload a song first.</p>
+                )}
+              </div>
             </div>
 
             <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
