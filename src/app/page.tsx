@@ -1,65 +1,210 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+
+type UploadedSong = {
+  url: string;
+  pathname: string;
+  size: number;
+  uploadedAt: string;
+};
+
+const MAX_SONGS = 5;
+
+function bytesToMb(bytes: number) {
+  return (bytes / (1024 * 1024)).toFixed(2);
+}
+
+function getAudioMimeType(pathname: string) {
+  const lower = pathname.toLowerCase();
+  if (lower.endsWith(".m4a")) {
+    return "audio/mp4";
+  }
+
+  return "audio/mpeg";
+}
 
 export default function Home() {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [songs, setSongs] = useState<UploadedSong[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string>("");
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    void loadSongs();
+  }, []);
+
+  async function loadSongs() {
+    setError("");
+    try {
+      const response = await fetch("/api/upload", { method: "GET" });
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string };
+        throw new Error(body.error ?? "Could not load song list.");
+      }
+
+      const body = (await response.json()) as { songs: UploadedSong[] };
+      setSongs(body.songs);
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : "Could not load song list.";
+      setError(message);
+    }
+  }
+
+  function onChooseFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    setNotice("");
+    setError("");
+
+    if (files.length === 0) {
+      setSelectedFiles([]);
+      return;
+    }
+
+    if (files.length > MAX_SONGS) {
+      setNotice(`Only the first ${MAX_SONGS} files will be uploaded.`);
+      setSelectedFiles(files.slice(0, MAX_SONGS));
+      return;
+    }
+
+    setSelectedFiles(files);
+  }
+
+  async function onUpload(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (selectedFiles.length === 0) {
+      setError("Please choose at least one MP3 or M4A file.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          throw new Error(body.error ?? `Upload failed for ${file.name}`);
+        }
+      }
+
+      setSelectedFiles([]);
+      setNotice("Upload successful.");
+      await loadSongs();
+    } catch (uploadError) {
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Upload failed.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="relative flex min-h-screen items-start justify-center overflow-hidden px-4 py-12 sm:px-8">
+      <div className="noise pointer-events-none absolute inset-0" />
+
+      <section className="relative z-10 w-full max-w-4xl rounded-3xl border border-white/45 bg-white/85 p-6 shadow-[0_30px_90px_-45px_rgba(18,32,60,0.45)] backdrop-blur sm:p-10">
+        <header className="space-y-3">
+          <p className="font-mono text-xs uppercase tracking-[0.26em] text-sky-900/75">
+            Next.js + Vercel Blob
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+          <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-5xl">
+            Upload short MP3 files and host them on Vercel
+          </h1>
+          <p className="max-w-2xl text-sm text-slate-700 sm:text-base">
+            You can pick up to 5 files each upload. Every uploaded song will show
+            up below with an audio player.
+          </p>
+        </header>
+
+        <form onSubmit={onUpload} className="mt-8 grid gap-4 rounded-2xl bg-slate-950 p-5 text-white sm:p-6">
+          <label className="text-sm leading-6 text-slate-200">
+            Choose MP3 or M4A files (max 5)
+            <input
+              type="file"
+              accept=".mp3,.m4a,audio/mpeg,audio/mp4,audio/x-m4a"
+              multiple
+              onChange={onChooseFiles}
+              className="mt-2 block w-full cursor-pointer rounded-xl border border-white/20 bg-white/10 p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-amber-300 file:px-3 file:py-2 file:font-semibold file:text-slate-950"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </label>
+
+          {selectedFiles.length > 0 && (
+            <ul className="grid gap-2 text-sm text-slate-200">
+              {selectedFiles.map((file) => (
+                <li key={file.name} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2">
+                  {file.name} ({bytesToMb(file.size)} MB)
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-1 rounded-xl bg-amber-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            {loading ? "Uploading..." : "Upload audio files"}
+          </button>
+
+          {notice && <p className="text-sm text-emerald-300">{notice}</p>}
+          {error && <p className="text-sm text-rose-300">{error}</p>}
+        </form>
+
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold text-slate-900">Uploaded songs</h2>
+          <div className="mt-3 grid gap-3">
+            {songs.length === 0 && (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-sm text-slate-600">
+                No uploaded songs yet.
+              </p>
+            )}
+
+            {songs.map((song) => (
+              <article
+                key={song.url}
+                className="rounded-xl border border-slate-200 bg-white/80 p-4"
+              >
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {song.pathname.split("/").pop()}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {new Date(song.uploadedAt).toLocaleString()} - {bytesToMb(song.size)} MB
+                </p>
+                <audio controls className="mt-3 w-full" preload="none">
+                  <source src={song.url} type={getAudioMimeType(song.pathname)} />
+                  Your browser does not support audio playback.
+                </audio>
+                <a
+                  href={song.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block text-sm font-medium text-sky-700 hover:text-sky-900"
+                >
+                  Open file URL
+                </a>
+              </article>
+            ))}
+          </div>
+        </section>
+      </section>
+    </main>
   );
 }
